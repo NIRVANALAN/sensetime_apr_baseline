@@ -1,40 +1,44 @@
 # !/usr/local/bin/python3
+from net import *
+from datafolder.folder import Train_Dataset
+import torch.nn as nn
+import torch
+import torch.optim as optim
+import matplotlib.pyplot as plt
 import os
 import time
 import argparse
 import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-import torch
-import torch.nn as nn
-from datafolder.folder import Train_Dataset
-from net import *
-
+from util import transfer_to_onehot
+matplotlib.use('agg')  #
 ######################################################################
 # Settings
 # --------
 use_gpu = True
 dataset_dict = {
-    'market'  :  'Market-1501',
-    'duke'  :  'DukeMTMC-reID',
+    'market':  'Market-1501',
+    'duke':  'DukeMTMC-reID',
 }
 model_dict = {
-    'resnet18'  :  ResNet18_nFC,
-    'resnet34'  :  ResNet34_nFC,
-    'resnet50'  :  ResNet50_nFC,
-    'densenet'  :  DenseNet121_nFC,
-    'resnet50_softmax'  :  ResNet50_nFC_softmax,
+    'resnet18':  ResNet18_nFC,
+    'resnet34':  ResNet34_nFC,
+    'resnet50':  ResNet50_nFC,
+    'densenet':  DenseNet121_nFC,
+    'resnet50_softmax':  ResNet50_nFC_softmax,
+    'resnet50_attribute_baseline': ResNet50_attribute_baseline,
 }
 
 ######################################################################
 # Argument
 # --------
 parser = argparse.ArgumentParser(description='Training')
-parser.add_argument('--data-path', default='/path/to/dataset', type=str, help='path to the dataset')
+parser.add_argument('--data-path', default='../../../dataset',
+                    type=str, help='path to the dataset')
 parser.add_argument('--dataset', default='market', type=str, help='dataset')
-parser.add_argument('--model', default='resnet50', type=str, help='model')
-parser.add_argument('--batch-size', default=16, type=int, help='batch size')
-parser.add_argument('--num-epoch', default=60, type=int, help='num of epoch')
+parser.add_argument(
+    '--model', default='resnet50_attribute_baseline', type=str, help='model')
+parser.add_argument('--batch-size', default=32, type=int, help='batch size')
+parser.add_argument('--num-epoch', default=55, type=int, help='num of epoch')
 parser.add_argument('--num-workers', default=1, type=int, help='num_workers')
 args = parser.parse_args()
 
@@ -50,8 +54,10 @@ if not os.path.isdir(model_dir):
 ######################################################################
 # Function
 # --------
+
+
 def save_network(network, epoch_label):
-    save_filename = 'net_%s.pth'% epoch_label
+    save_filename = 'net_%s.pth' % epoch_label
     save_path = os.path.join(model_dir, save_filename)
     torch.save(network.cpu().state_dict(), save_path)
     if use_gpu:
@@ -60,18 +66,16 @@ def save_network(network, epoch_label):
 
 ######################################################################
 # Draw Curve
-#-----------
+# -----------
 x_epoch = []
-y_loss = {} # loss history
-y_loss['train'] = []
-y_loss['val'] = []
-y_err = {}
-y_err['train'] = []
-y_err['val'] = []
+y_loss = {'train': [], 'val': []}  # loss history
+y_err = {'train': [], 'val': []}
 
 fig = plt.figure()
 ax0 = fig.add_subplot(121, title="loss")
 ax1 = fig.add_subplot(122, title="top1err")
+
+
 def draw_curve(current_epoch):
     x_epoch.append(current_epoch)
     ax0.plot(x_epoch, y_loss['train'], 'bo-', label='train')
@@ -81,25 +85,25 @@ def draw_curve(current_epoch):
     if current_epoch == 0:
         ax0.legend()
         ax1.legend()
-    fig.savefig( os.path.join(model_dir, 'train.jpg'))
+    fig.savefig(os.path.join(model_dir, 'train.jpg'))
 
 
 ######################################################################
 # DataLoader
 # ---------
-image_datasets = {}
-image_datasets['train'] = Train_Dataset(data_dir, dataset_name=dataset_dict[args.dataset],
-                                        train_val='train')
-image_datasets['val'] = Train_Dataset(data_dir, dataset_name=dataset_dict[args.dataset],
-                                      train_val='query')
+image_datasets = {'train': Train_Dataset(data_dir, dataset_name=dataset_dict[args.dataset],
+                                         train_val='train'),
+                  'val': Train_Dataset(data_dir, dataset_name=dataset_dict[args.dataset],
+                                       train_val='query')}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=args.batch_size,
-                                             shuffle=True, num_workers=args.num_workers)
-              for x in ['train', 'val']}
+                                              shuffle=True, num_workers=args.num_workers)
+               for x in ['train', 'val']}
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 
-images, indices, labels, ids, cams, names = next(iter(dataloaders['train']))
+# images, indices, labels, ids, cams, names = next(iter(dataloaders['train']))
 
 num_label = image_datasets['train'].num_label()
+print('num_label' + str(num_label))
 num_id = image_datasets['train'].num_id()
 labels_list = image_datasets['train'].labels()
 
@@ -107,21 +111,28 @@ labels_list = image_datasets['train'].labels()
 ######################################################################
 # Model and Optimizer
 # ------------------
-model = model_dict[args.model](num_label)
+model = model_dict[args.model](num_label, num_id)  # for softmax
+# model = model_dict[args.model](num_label)  #
 if use_gpu:
     model = model.cuda()
 # loss
-criterion = nn.BCELoss()
+criterion_attr = nn.BCELoss()
+criterion_id = nn.CrossEntropyLoss()
+# criterion = nn.CrossEntropyLoss()  # for softmax loss
 # optimizer
-optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum = 0.9,
-                            weight_decay = 5e-4, nesterov = True,)
-exp_lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 20, gamma = 0.1,)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9,
+                            weight_decay=5e-4, nesterov=True,)
+exp_lr_scheduler = torch.optim.lr_scheduler.StepLR(
+    optimizer, step_size=50, gamma=0.1,)
+
+#################
+# util
 
 
 ######################################################################
 # Training the model
 # ------------------
-def train_model(model, criterion, optimizer, scheduler, num_epochs):
+def train_model(model, criterion_attr, criterion_id, optimizer, scheduler, num_epochs, apr_factor=6):
     since = time.time()
 
     for epoch in range(num_epochs):
@@ -148,6 +159,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
                     images = images.cuda()
                     labels = labels.cuda()
                     indices = indices.cuda()
+                    ids = ids.cuda()
                 images = images
                 labels = labels.float()
                 indices = indices
@@ -156,20 +168,30 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
                 optimizer.zero_grad()
 
                 # forward
-                outputs = model(images)
+                # outputs, _ = model(images)
+                outputs, _ = model(images)
 
-                label_loss = criterion(outputs, labels)
+                # print(labels)
+                # print(len(outputs))
+                label_output = outputs[:num_label]
+                id_output = outputs[-1]
+                attr_loss = criterion_attr(
+                    label_output, transfer_to_onehot(labels))
+                id_loss = criterion_id(id_output, ids)
+                APR_loss = apr_factor * attr_loss + id_loss/labels
 
                 # backward + optimize only if in training phase
                 if phase == 'train':
-                    label_loss.backward()
+                    APR_loss.backward()
                     optimizer.step()
 
-                preds = torch.gt(outputs, torch.ones_like(outputs)/2 ).data
+                attr_preds = torch.gt(outputs, torch.ones_like(outputs)/2).data
                 # statistics
-                running_loss += label_loss.item()
-                running_corrects += torch.sum(preds == labels.data.byte()).item() / num_label
-                print('step : ({}/{})  |  loss : {:.4f}'.format(count*args.batch_size, dataset_sizes[phase], label_loss.item()))
+                running_loss += attr_loss.item()
+                running_corrects += torch.sum(attr_preds ==
+                                              labels.data.byte()).item() / num_label
+                print('step : ({}/{})  |  loss : {:.4f}'.format(count *
+                                                                args.batch_size, dataset_sizes[phase], attr_loss.item()))
 
             epoch_loss = running_loss / len(dataloaders[phase])
             epoch_acc = running_corrects / dataset_sizes[phase]
@@ -181,7 +203,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
             # deep copy the model
             if phase == 'val':
                 last_model_wts = model.state_dict()
-                if epoch%10 == 9:
+                if epoch % 10 == 9:
                     save_network(model, epoch)
                 draw_curve(epoch)
 
@@ -197,5 +219,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
 ######################################################################
 # Main
 # -----
-model = train_model(model, criterion, optimizer, exp_lr_scheduler,
-                    num_epochs = args.num_epoch)
+# model = train_model(model, criterion_attr, criterion_id, optimizer, exp_lr_scheduler,
+#                     num_epochs=args.num_epoch)
+
+if __name__ == "__main__":
+    label = torch.tensor([1, 0, 0, 1, 1])
+    print(transfer_to_onehot(label))

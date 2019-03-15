@@ -25,10 +25,10 @@ def weights_init_classifier(m):
         init.constant_(m.bias.data, 0.0)
 
 
-class ResNet50_nFC_softmax(nn.Module):
-    def __init__(self, class_num, id_num, dropout=0.5, **kwargs):
-        super(ResNet50_nFC_softmax, self).__init__()
-        self.model_name = 'resnet50_nfc_softmax'
+class ResNet50_attribute_baseline(nn.Module):
+    def __init__(self, class_num, id_num=None, dropout=0.9, **kwargs):
+        super(ResNet50_attribute_baseline, self).__init__()
+        self.model_name = 'resnet50_attribute_baseline'
         self.class_num = class_num
         self.id_num = id_num
 
@@ -36,13 +36,13 @@ class ResNet50_nFC_softmax(nn.Module):
 
         # avg pooling to global pooling
         model_ft.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        model_ft.fc = nn.Sequential()
+        model_ft.fc = nn.Sequential()  # remove fc
         self.features = model_ft
         self.num_ftrs = 2048
         num_bottleneck = 512
 
         for c in range(self.class_num+1):
-            if c == self.class_num:  # for identity classification
+            if c == self.class_num:   # for identity classification
                 self.__setattr__('class_%d' % c,
                                  nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
                                                nn.BatchNorm1d(num_bottleneck),
@@ -56,13 +56,13 @@ class ResNet50_nFC_softmax(nn.Module):
             #                   nn.LeakyReLU(0.1),
             #                   nn.Dropout(p=0.5),
             #                   nn.Linear(num_bottleneck, 2)))
-            else:
-                self.__setattr__('class_{}'.format(c),  # for attribute?
-                                 nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
-                                               nn.BatchNorm1d(num_bottleneck),
-                                               nn.LeakyReLU(0.1),
-                                               nn.Dropout(p=dropout),
-                                               nn.Linear(num_bottleneck, 2)))
+            # else:
+            self.__setattr__('class_{}'.format(c),
+                                nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
+                                            nn.BatchNorm1d(num_bottleneck),
+                                            nn.LeakyReLU(0.1),
+                                            nn.Dropout(p=dropout),
+                                            nn.Linear(num_bottleneck, 2)))
 
     def forward(self, x):
         x = self.features(x)

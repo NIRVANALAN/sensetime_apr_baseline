@@ -3,6 +3,7 @@ from .ResNet34_nFC import ResNet34_nFC
 from .ResNet50_nFC import ResNet50_nFC
 from .DenseNet121_nFC import DenseNet121_nFC
 from .ResNet50_nFC_softmax import ResNet50_nFC_softmax
+from .ResNet50_attribute_baseline import ResNet50_attribute_baseline
 
 __all__ = [
     'ResNet50_nFC',
@@ -10,5 +11,5 @@ __all__ = [
     'ResNet34_nFC',
     'ResNet18_nFC',
     'ResNet50_nFC_softmax',
+    'ResNet50_attribute_baseline'
 ]
-
