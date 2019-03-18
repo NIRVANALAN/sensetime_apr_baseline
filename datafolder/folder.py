@@ -11,14 +11,17 @@ from .reid_dataset import import_DukeMTMCAttribute_binary
 
 class Train_Dataset(data.Dataset):
 
-    def __init__(self, data_dir, dataset_name, transforms=None, train_val='train' ):
+    def __init__(self, data_dir, dataset_name, transforms=None, train_val='train'):
 
-        train, query, gallery = import_MarketDuke_nodistractors(data_dir, dataset_name)
+        train, query, gallery = import_MarketDuke_nodistractors(
+            data_dir, dataset_name)
 
         if dataset_name == 'Market-1501':
-            train_attr, test_attr, self.label = import_Market1501Attribute_binary(data_dir)
+            train_attr, test_attr, self.label = import_Market1501Attribute_binary(
+                data_dir)
         elif dataset_name == 'DukeMTMC-reID':
-            train_attr, test_attr, self.label = import_DukeMTMCAttribute_binary(data_dir)
+            train_attr, test_attr, self.label = import_DukeMTMCAttribute_binary(
+                data_dir)
         else:
             print('Input should only be Market1501 or DukeMTMC')
 
@@ -72,6 +75,8 @@ class Train_Dataset(data.Dataset):
         id = self.train_data[index][2]
         cam = self.train_data[index][3]
         label = np.asarray(self.train_attr[id])
+        # id = np.asarray([int(i) for i in id])
+        id = int(id)
         data = Image.open(img_path)
         data = self.transforms(data)
         name = self.train_data[index][4]
@@ -90,15 +95,17 @@ class Train_Dataset(data.Dataset):
         return self.label
 
 
-
 class Test_Dataset(data.Dataset):
-    def __init__(self, data_dir, dataset_name, transforms=None, query_gallery='query' ):
-        train, query, gallery = import_MarketDuke_nodistractors(data_dir, dataset_name)
+    def __init__(self, data_dir, dataset_name, transforms=None, query_gallery='query'):
+        train, query, gallery = import_MarketDuke_nodistractors(
+            data_dir, dataset_name)
 
         if dataset_name == 'Market-1501':
-            self.train_attr, self.test_attr, self.label = import_Market1501Attribute_binary(data_dir)
+            self.train_attr, self.test_attr, self.label = import_Market1501Attribute_binary(
+                data_dir)
         elif dataset_name == 'DukeMTMC-reID':
-            self.train_attr, self.test_attr, self.label = import_DukeMTMCAttribute_binary(data_dir)
+            self.train_attr, self.test_attr, self.label = import_DukeMTMCAttribute_binary(
+                data_dir)
         else:
             print('Input should only be Market1501 or DukeMTMC')
 
