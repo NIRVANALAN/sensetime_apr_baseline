@@ -39,7 +39,8 @@ parser.add_argument('--dataset', default='market', type=str, help='dataset')
 parser.add_argument('--model', default='resnet50_softmax', type=str, help='model')
 parser.add_argument('--batch-size', default=32, type=int, help='batch size')
 parser.add_argument('--num-epoch', default=55, type=int, help='num of epoch')
-parser.add_argument('--num-workers', default=1, type=int, help='num_workers')
+parser.add_argument('--num-workers', default=8, type=int, help='num_workers')
+parser.add_argument('--lr', default=0.05, type=float, help='learning rate')
 args = parser.parse_args()
 
 assert args.dataset in dataset_dict.keys()
@@ -120,11 +121,24 @@ if use_gpu:
 # criterion_attr = nn.CrossEntropyLoss()
 criterion = nn.CrossEntropyLoss()
 # criterion = nn.CrossEntropyLoss()  # for softmax loss
+
 # optimizer
-optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9,
-                            weight_decay=5e-4, nesterov=True, )
+# optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9,
+#                             weight_decay=5e-4, nesterov=True, )
+
+ignored_params = list(map(id, model.model.fc.parameters()))
+for i in range(num_label + 1):
+	list(map(id, model.__getattr__('class_' + str(i)).parameters()))
+
+base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+optimizer_ft = optim.SGD([
+	{'params': base_params, 'lr': 0.1 * args.lr},
+	{'params': model.model.fc.parameters(), 'lr': args.lr},
+	# {'params': model.classifier.parameters(), 'lr': args.lr}
+], lr=args.lr, weight_decay=5e-4, momentum=0.9, nesterov=True)
+
 exp_lr_scheduler = torch.optim.lr_scheduler.StepLR(
-	optimizer, step_size=50, gamma=0.1, )
+	optimizer_ft, step_size=40, gamma=0.1, )
 
 
 #################
@@ -149,8 +163,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, apr_factor=6
 			else:
 				model.train(False)  # Set model to evaluate mode
 			
-			running_attr_loss = 0.0
-			running_corrects = 0
+			running_APR_loss = 0.0
+			running_id_corrects = 0
 			
 			# Iterate over data.
 			for count, data in enumerate(dataloaders[phase]):
@@ -201,16 +215,16 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, apr_factor=6
 				# 	label_output, torch.ones_like(label_output) / 2).data
 				
 				# statistics
-				running_attr_loss += APR_loss.item()
+				running_APR_loss += APR_loss.item()
 				# running_corrects += torch.sum(attr_preds ==
 				#                               labels.data.byte()).item() / num_label
-				running_corrects += float(torch.sum(pred == indices.data))
-				print('step : ({}/{})  |  loss : {:.4f}'.format(count *
+				running_id_corrects += float(torch.sum(pred == indices.data))
+				print('step : ({}/{})  |  APR_loss : {:.4f} | id_loss : {:.4f}'.format(count *
 				                                                args.batch_size, dataset_sizes[phase],
-				                                                attr_loss.item()))
+				                                                APR_loss.item(), id_loss.item()))
 			
-			epoch_loss = running_attr_loss / len(dataloaders[phase])
-			epoch_acc = running_corrects / dataset_sizes[phase]
+			epoch_loss = running_APR_loss / len(dataloaders[phase])
+			epoch_acc = running_id_corrects / dataset_sizes[phase]
 			
 			print('{} Loss: {:.4f} Acc: {:.4f}'.format(
 				phase, epoch_loss, epoch_acc))
@@ -235,5 +249,5 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, apr_factor=6
 ######################################################################
 # Main
 # -----
-model = train_model(model, criterion, optimizer, exp_lr_scheduler,
+model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
                     num_epochs=args.num_epoch)
