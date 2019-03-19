@@ -1,3 +1,5 @@
 .idea
 __pycache__
 checkpoints
+.ipynb_checkpoints/
+cross entrophy test.ipynb

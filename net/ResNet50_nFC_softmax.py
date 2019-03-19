@@ -44,25 +44,25 @@ class ResNet50_nFC_softmax(nn.Module):
 		for c in range(self.class_num + 1):
 			if c == self.class_num:  # for identity classification
 				self.__setattr__('class_%d' % c,
-				                 nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
-				                               nn.BatchNorm1d(num_bottleneck),
-				                               nn.LeakyReLU(0.1),
-				                               nn.Dropout(p=dropout),
-				                               nn.Linear(num_bottleneck, self.id_num)))
-			# else:
-			#     self.__setattr__('class_%d' % c,
-			#     nn.Sequential(nn.Linear(self.num_ftrs,num_bottleneck),
-			#                   nn.BatchNorm1d(num_bottleneck),
-			#                   nn.LeakyReLU(0.1),
-			#                   nn.Dropout(p=0.5),
-			#                   nn.Linear(num_bottleneck, 2)))
+								 nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
+											   nn.BatchNorm1d(num_bottleneck),
+											   nn.LeakyReLU(0.1),
+											   nn.Dropout(p=dropout),
+											   nn.Linear(num_bottleneck, self.id_num)))
 			else:
-				self.__setattr__('class_{}'.format(c),  # for attribute?
-				                 nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
-				                               nn.BatchNorm1d(num_bottleneck),
-				                               nn.LeakyReLU(0.1),
-				                               nn.Dropout(p=dropout),
-				                               nn.Linear(num_bottleneck, 2)))
+				self.__setattr__('class_%d' % c,
+				nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
+							  nn.BatchNorm1d(num_bottleneck),
+							  nn.LeakyReLU(0.1),
+							  nn.Dropout(p=dropout),
+							  nn.Linear(num_bottleneck, 4)))
+			# else:
+			# 	self.__setattr__('class_{}'.format(c),  # for attribute?
+			# 	                 nn.Sequential(nn.Linear(self.num_ftrs, num_bottleneck),
+			# 	                               nn.BatchNorm1d(num_bottleneck),
+			# 	                               nn.LeakyReLU(0.1),
+			# 	                               nn.Dropout(p=dropout),
+			# 	                               nn.Linear(num_bottleneck, 2)))
 	
 	def forward(self, x):
 		x = self.features(x)

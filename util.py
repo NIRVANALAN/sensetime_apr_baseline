@@ -16,6 +16,8 @@ def transfer_to_onehot(label):
 				onehot[j][i] = 1
 			else:
 				onehot[j][i] = 0
+			print(str(onehot[j][i].data.cpu().numpy()) + " ", end=' ')
+		print()
 	return onehot.cuda()
 
 

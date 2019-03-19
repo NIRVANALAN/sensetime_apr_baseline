@@ -37,7 +37,7 @@ parser.add_argument('--data-path', default='../../../dataset',
                     type=str, help='path to the dataset')
 parser.add_argument('--dataset', default='market', type=str, help='dataset')
 parser.add_argument('--model', default='resnet50_softmax', type=str, help='model')
-parser.add_argument('--batch-size', default=16, type=int, help='batch size')
+parser.add_argument('--batch-size', default=32, type=int, help='batch size')
 parser.add_argument('--num-epoch', default=55, type=int, help='num of epoch')
 parser.add_argument('--num-workers', default=1, type=int, help='num_workers')
 args = parser.parse_args()
@@ -159,7 +159,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, apr_factor=6
 				# wrap them in Variable
 				if use_gpu:
 					images = images.cuda()
-					labels = labels.cuda()  # 32 * 30
+					labels = labels.t().cuda()  # 32 * 30
 					indices = indices.cuda()
 					ids = ids.cuda()
 				# print(ids)
@@ -181,24 +181,30 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs, apr_factor=6
 				# for i in range(1, len(labels)):
 				# 	attr_loss += criterion_attr(label_output[i], onehot_label[i])
 				
-				labels = transfer_to_onehot(labels)
+				# labels = transfer_to_onehot(labels)
+				# labels = labels.t()  # M * batch_size
+				_, pred = torch.max(id_output.data, 1)
+				id_loss = criterion(id_output, indices)
 				
-				id_loss = criterion(id_output, ids)
 				attr_loss = criterion(label_output[0], labels[0])
+				for i in range(1, len(labels)):
+					attr_loss += criterion(label_output[i], labels[i])
 				
-				APR_loss = id_loss + attr_loss  # attr_loss already averaged
+				APR_loss = apr_factor * id_loss + attr_loss / len(labels)  # attr_loss already averaged
 				
 				# backward + optimize only if in training phase
 				if phase == 'train':
 					APR_loss.backward()
 					optimizer.step()
 				
-				attr_preds = torch.gt(
-					outputs, torch.ones_like(outputs) / 2).data
+				# attr_preds = torch.gt(
+				# 	label_output, torch.ones_like(label_output) / 2).data
+				
 				# statistics
-				running_attr_loss += id_loss.item()
-				running_corrects += torch.sum(attr_preds ==
-				                              labels.data.byte()).item() / num_label
+				running_attr_loss += APR_loss.item()
+				# running_corrects += torch.sum(attr_preds ==
+				#                               labels.data.byte()).item() / num_label
+				running_corrects += float(torch.sum(pred == indices.data))
 				print('step : ({}/{})  |  loss : {:.4f}'.format(count *
 				                                                args.batch_size, dataset_sizes[phase],
 				                                                attr_loss.item()))
